@@ -5,3 +5,4 @@ class Student:
         self.lname = lname
         self.exp = exp
         self.attended_polls = 0
+        self.correct_ans = 0
