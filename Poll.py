@@ -10,6 +10,7 @@ class Poll:
         self.students = {}
         self.answerkey = []
         self.marked = []
+        self.selected_options = []
 
     def strip_accents(self, text):
         choices = {"İ": "I", "Ş": "S", "Ü": "U", "Ö": "O", "Ç": "C", "Ğ": "G", "i": "i", "ç": "c", "ğ": "g", "ö": "o",
