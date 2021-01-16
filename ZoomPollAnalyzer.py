@@ -1,24 +1,25 @@
 import glob
 import os
-import unicodedata
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas
 
 from Answerkey import Answerkey
+from CommonUtils import CommonUtils
+from ExcelWriter import ExcelWriter
 from Poll import Poll
 from Question import Question
 from Student import Student
 
 
-class Main:
+class ZoomPollAnalyzer:
     def __init__(self, answer_dir, students_dir,
                  polls_dir, out_dir):
         self.answer_dir = answer_dir
         self.students_dir = students_dir
         self.polls_dir = polls_dir
         self.out_dir = out_dir
+        self.utils = CommonUtils()
 
     def populate_answer_keys(self, directory):
         count = 1
@@ -50,23 +51,13 @@ class Main:
                         exp = " "
                     else:
                         exp = cleaned_row[5]
-                    st = Student(cleaned_row[2], self.strip_accents(cleaned_row[3]), self.strip_accents(cleaned_row[4]),
+                    st = Student(cleaned_row[2], self.utils.strip_accents(cleaned_row[3]),
+                                 self.utils.strip_accents(cleaned_row[4]),
                                  exp)
                     students.append(st)
                 if np.isin("Öğrenci No", cleaned_row):
                     start = True
-
         return students
-
-    def strip_accents(self, text):
-        choices = {"İ": "I", "ı": "I", "Ş": "S", "Ü": "U", "Ö": "O", "Ç": "C", "Ğ": "G", "i": "i", "ç": "c", "ğ": "g",
-                   "ö": "o",
-                   "ş": "s", "ü": "u"}
-        for i in range(len(text)):
-            text = text.replace(text[i:i + 1], choices.get(text[i], text[i]))
-        return ''.join(char for char in
-                       unicodedata.normalize('NFKD', text)
-                       if unicodedata.category(char) != 'Mn')
 
     def populate_polls(self, directory):
         count = 1
@@ -94,7 +85,7 @@ class Main:
                 for q in range(4, len(tup), 2):
                     question = Question("".join(tup[q].split()), "".join(tup[q + 1].split()))
                     poll.insert_question(question)
-                poll.insert_student(self.strip_accents(tup[1]))
+                poll.insert_student(self.utils.strip_accents(tup[1]))
             polls.append(poll)
             count += 1
         return polls
@@ -130,7 +121,6 @@ class Main:
                 else:
                     marks.append(0)
             marked_students.append(marks)
-
         q_iter = 0
         chosen_answers = []
         for ak in answer_key.question_list:
@@ -145,19 +135,16 @@ class Main:
             qa["correct"] = ak.get_answer()
             chosen_answers.append(qa)
             q_iter += 1
-
         return marked_students, chosen_answers
 
     def start(self):
         results = []
+        self.utils.clean_output_folder(self.out_dir)
         answer_keys = self.populate_answer_keys(self.answer_dir)
         student_list = self.populate_students_list(self.students_dir)
         polls = self.populate_polls(self.polls_dir)
-
         new_polls = self.identify_poll(polls, answer_keys)
-
         marked_students = self.mark_attendance(student_list, new_polls)
-
         ids = []
         fnames = []
         lnames = []
@@ -173,20 +160,17 @@ class Main:
             att_polls.append(len(new_polls))
             att_rate.append("Attended {} of {}".format(st.attended_polls, len(new_polls)))
             att_per.append("Attended Percentage = {}".format((st.attended_polls / len(new_polls)) * 100))
-
-        df = pandas.DataFrame.from_dict(
-            {'Öğrenci No': ids, 'Adı': fnames, 'Soyadı': lnames, 'Açıklama': exps,
-             'Number of Attendance Polls': att_polls,
-             'Attendance Rate': att_rate, 'Attendance Percentage': att_per})
-        df.to_excel(self.out_dir + '/attendance.xlsx', header=True, index=False)
-
+        out_dict = {'Öğrenci No': ids, 'Adı': fnames, 'Soyadı': lnames, 'Açıklama': exps,
+                    'Number of Attendance Polls': att_polls,
+                    'Attendance Rate': att_rate, 'Attendance Percentage': att_per}
+        er = ExcelWriter(out_dict, self.out_dir + '/attendance.xlsx')
+        er.write_excel()
         marked_polls = []
         for poll in new_polls:
             marks, ans = self.mark_quiz(poll)
             poll.marked = marks
             marked_polls.append(poll)
             poll.selected_options = ans
-
         poll_number = 0
         for pl in marked_polls:
             questions_dict = {}
@@ -204,7 +188,7 @@ class Main:
                 check = False
                 for i in range(len(pl.students)):
                     n = fnames[i].lower() + " " + lnames[i].lower()
-                    if self.strip_accents(st.lower()) in self.strip_accents(n):
+                    if self.utils.strip_accents(st.lower()) in self.utils.strip_accents(n):
                         q_ids.append(ids[i])
                         q_fnames.append(fnames[i])
                         q_lnames.append(lnames[i])
@@ -222,32 +206,34 @@ class Main:
                 success_rate.append("{} of {}".format(len(correct), len(pl.question_list)))
                 success_per.append("Success Percentage= {} ".format((len(correct) / len(pl.question_list)) * 100))
                 count += 1
-
             questions_dict['Öğrenci No'] = q_ids
             questions_dict['Adı'] = q_fnames
             questions_dict['Soyadı'] = q_lnames
             questions_dict['Açıklama'] = q_exps
             poll_name = pl.name
-
             bar_counter = 0
             os.mkdir(self.out_dir + "/Histograms " + poll_name + str(poll_number))
             for qa in pl.selected_options:
-                # print("for poll # {}, ".format(poll_number + 1), chosen_answers[poll_number])
+                ans_keys = []
+                que_keys = []
                 colors = []
                 correct_ans = qa.pop("correct", None)
-                for value in qa.keys():  # keys are the names of the boys
+                for value in qa.keys():
+                    que_keys.append(value)
+                    ans_keys.append(qa[value])
                     if value == correct_ans:
                         colors.append('g')
                     else:
                         colors.append('b')
-
-                plt.bar(list(qa.keys()), qa.values(), color=colors)
-                plt.title(poll_name)
-
-                plt.savefig(self.out_dir + "/Histograms " + poll_name + str(poll_number) + "/ Q" + str(bar_counter + 1))
-                plt.clf()
+                qu_dict = {"answers": que_keys, "count": ans_keys}
+                er.set_dict(qu_dict)
+                er.set_path(self.out_dir + "/Histograms " + poll_name + str(poll_number) + "/ Q" + str(
+                    bar_counter + 1) + ".xlsx")
+                er.write_excel()
+                self.utils.plot_histograms(qa, colors, poll_name,
+                                           self.out_dir + "/Histograms " + poll_name + str(poll_number) + "/ Q" + str(
+                                               bar_counter + 1))
                 bar_counter += 1
-
             for i in range(len(pl.question_list)):
                 col = []
                 question_number = "Q{}".format(i + 1)
@@ -259,7 +245,6 @@ class Main:
                         col.append(m[i])
                     q += 1
                 questions_dict[question_number] = col
-
             for index in range(len(pl.students)):
                 if index in false_indices:
                     success_rate[index] = "-"
@@ -270,9 +255,8 @@ class Main:
             questions_dict['Number of Questions'] = number_of_q
             questions_dict['Success rate'] = success_rate
             questions_dict['Success Percentage'] = success_per
-
             results.append(questions_dict)
-            df = pandas.DataFrame.from_dict(
-                questions_dict)
-            df.to_excel(self.out_dir + "/" + poll_name + str(poll_number + 1) + ".xlsx", header=True, index=False)
+            er.set_dict(questions_dict)
+            er.set_path(self.out_dir + "/" + poll_name + str(poll_number + 1) + ".xlsx")
+            er.write_excel()
             poll_number += 1

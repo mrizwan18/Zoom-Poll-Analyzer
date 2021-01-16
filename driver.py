@@ -1,4 +1,4 @@
-from Main import Main
+from ZoomPollAnalyzer import ZoomPollAnalyzer
 
-main = Main("answer-keys-directory", "students-list-directory", "polls-directory", "output")
-main.start()
+driver = ZoomPollAnalyzer("answer-keys-directory", "students-list-directory", "polls-directory", "output")
+driver.start()

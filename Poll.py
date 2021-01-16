@@ -1,4 +1,4 @@
-import unicodedata
+from CommonUtils import CommonUtils
 
 
 class Poll:
@@ -11,15 +11,7 @@ class Poll:
         self.answerkey = []
         self.marked = []
         self.selected_options = []
-
-    def strip_accents(self, text):
-        choices = {"İ": "I", "Ş": "S", "Ü": "U", "Ö": "O", "Ç": "C", "Ğ": "G", "i": "i", "ç": "c", "ğ": "g", "ö": "o",
-                   "ş": "s", "ü": "u"}
-        for i in range(len(text)):
-            text = text.replace(text[i:i + 1], choices.get(text[i], text[i]))
-        return ''.join(char for char in
-                       unicodedata.normalize('NFKD', text)
-                       if unicodedata.category(char) != 'Mn')
+        self.utils = CommonUtils()
 
     def set_name(self, name):
         self.name = name
@@ -31,7 +23,7 @@ class Poll:
         self.questions.append(question)
 
     def insert_student(self, name):
-        self.students[self.strip_accents(name)] = self.questions
+        self.students[self.utils.strip_accents(name)] = self.questions
         self.question_list = self.questions
         self.questions = []
 
@@ -39,7 +31,7 @@ class Poll:
         check = False
         students = list(self.students.keys())
         for i in range(len(students)):
-            if self.strip_accents(students[i].lower()) in self.strip_accents(name.lower()):
+            if self.utils.strip_accents(students[i].lower()) in self.utils.strip_accents(name.lower()):
                 check = True
                 break
         return check
